@@ -1,73 +1,74 @@
-# Welcome to your Lovable project
+# Secure Shield Training Platform
 
-## Project info
+A modern web application for managing cybersecurity awareness campaigns, employee training, and phishing simulations. Built with Vite, React, TypeScript, shadcn-ui, and Tailwind CSS.
 
-**URL**: https://lovable.dev/projects/62c8bf77-4b40-474f-98a1-689ba732eb75
+## Features
 
-## How can I edit this code?
+- **Admin Dashboard:** View campaign stats, employee performance, and quiz results.
+- **Campaign Management:** Create, schedule, and track phishing campaigns.
+- **Employee Directory:** Filter, search, and manage employee records.
+- **Training & Quizzes:** Deliver training modules and interactive quizzes.
+- **Reports:** Generate and view detailed campaign and training reports.
+- **Authentication:** Secure login for admins using Supabase.
+- **Responsive UI:** Clean, accessible design with shadcn-ui and Tailwind CSS.
 
-There are several ways of editing your application.
+## Technologies
 
-**Use Lovable**
+- [Vite](https://vitejs.dev/) – Fast development/build tool
+- [React](https://react.dev/) – UI library
+- [TypeScript](https://www.typescriptlang.org/) – Type safety
+- [shadcn-ui](https://ui.shadcn.com/) – UI components
+- [Tailwind CSS](https://tailwindcss.com/) – Utility-first CSS
+- [Supabase](https://supabase.com/) – Backend/auth/database
+- [Radix UI](https://www.radix-ui.com/) – Accessible UI primitives
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/62c8bf77-4b40-474f-98a1-689ba732eb75) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+1. **Install dependencies:**
+   ```sh
+   npm install
+   ```
 
-**Use your preferred IDE**
+2. **Start the development server:**
+   ```sh
+   npm run dev
+   ```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+3. **Lint your code:**
+   ```sh
+   npm run lint
+   ```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+4. **Build for production:**
+   ```sh
+   npm run build
+   ```
 
-Follow these steps:
+## Project Structure
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```
+secure-shield-training/
+├── src/
+│   ├── components/         # UI and layout components
+│   ├── hooks/              # Custom React hooks
+│   ├── integrations/       # Supabase client and types
+│   ├── pages/              # Route pages (Dashboard, Quiz, etc.)
+│   ├── assets/             # Static assets
+│   └── App.tsx             # Main app entry
+├── public/                 # Static files
+├── package.json            # Project metadata and scripts
+├── tailwind.config.ts      # Tailwind CSS config
+├── vite.config.ts          # Vite config
+└── README.md               # Project documentation
 ```
 
-**Edit a file directly in GitHub**
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
 
-**Use GitHub Codespaces**
+## License
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+ISC
 
-## What technologies are used for this project?
+---
 
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/62c8bf77-4b40-474f-98a1-689ba732eb75) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+**Contributions and issues:**  
+Feel free to open issues or pull requests on [GitHub](https://github.com/Hking0o1/secure-shield-training).
