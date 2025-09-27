@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,36 +22,155 @@ import {
   Eye
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { supabase } from "@/integrations/supabase/client";
 
 const AdminDashboard = () => {
+  const [stats, setStats] = useState({
+    totalCampaigns: 0,
+    totalEmployees: 0,
+    clickRate: "0%",
+    quizPassRate: "0%"
+  });
+  const [clickTrendData, setClickTrendData] = useState([]);
+  const [departmentData, setDepartmentData] = useState([]);
+  const [recentCampaigns, setRecentCampaigns] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      // Fetch summary stats
+      const [campaignsResult, employeesResult, clicksResult, quizResult] = await Promise.all([
+        supabase.from('campaigns').select('*'),
+        supabase.from('employees').select('*'),
+        supabase.from('campaign_clicks').select('*'),
+        supabase.from('quiz_responses').select('score, total_questions')
+      ]);
+
+      const totalCampaigns = campaignsResult.data?.length || 0;
+      const totalEmployees = employeesResult.data?.length || 0;
+      const totalClicks = clicksResult.data?.length || 0;
+      
+      // Calculate click rate
+      const { data: targetsData } = await supabase.from('campaign_targets').select('*');
+      const totalTargets = targetsData?.length || 1;
+      const clickRate = Math.round((totalClicks / totalTargets) * 100);
+      
+      // Calculate quiz pass rate
+      const passedQuizzes = quizResult.data?.filter(quiz => 
+        quiz.score >= Math.ceil(quiz.total_questions * 0.7)
+      ).length || 0;
+      const quizPassRate = quizResult.data?.length ? 
+        Math.round((passedQuizzes / quizResult.data.length) * 100) : 0;
+
+      setStats({
+        totalCampaigns,
+        totalEmployees,
+        clickRate: `${clickRate}%`,
+        quizPassRate: `${quizPassRate}%`
+      });
+
+      // Fetch department performance
+      const { data: deptData } = await supabase
+        .from('employees')
+        .select(`
+          department,
+          id,
+          campaign_clicks!inner(id)
+        `);
+
+      const deptStats = deptData?.reduce((acc, emp) => {
+        if (!acc[emp.department]) {
+          acc[emp.department] = { employees: 0, clicked: 0 };
+        }
+        acc[emp.department].employees++;
+        if (emp.campaign_clicks.length > 0) {
+          acc[emp.department].clicked++;
+        }
+        return acc;
+      }, {});
+
+      const departmentChartData = Object.entries(deptStats || {}).map(([dept, data]: [string, any]) => ({
+        department: dept,
+        employees: data.employees,
+        clicked: data.clicked,
+        rate: `${Math.round((data.clicked / data.employees) * 100)}%`
+      }));
+
+      setDepartmentData(departmentChartData);
+
+      // Fetch recent campaigns with stats
+      const { data: campaignData } = await supabase
+        .from('campaigns')
+        .select(`
+          *,
+          campaign_targets(count),
+          campaign_clicks(count)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(4);
+
+      const campaignsWithStats = campaignData?.map(campaign => ({
+        id: campaign.id,
+        name: campaign.name,
+        date: new Date(campaign.created_at).toLocaleDateString(),
+        targeted: campaign.campaign_targets?.[0]?.count || 0,
+        clicked: campaign.campaign_clicks?.[0]?.count || 0,
+        clickRate: campaign.campaign_targets?.[0]?.count ? 
+          `${Math.round((campaign.campaign_clicks?.[0]?.count || 0) / campaign.campaign_targets[0].count * 100)}%` : 
+          '0%',
+        status: campaign.status === 'completed' ? 'Completed' : 'In Progress'
+      })) || [];
+
+      setRecentCampaigns(campaignsWithStats);
+
+      // Mock trend data for now (you can enhance this with actual monthly data)
+      setClickTrendData([
+        { month: "Jan", clicks: Math.floor(Math.random() * 30) + 10 },
+        { month: "Feb", clicks: Math.floor(Math.random() * 30) + 10 },
+        { month: "Mar", clicks: Math.floor(Math.random() * 30) + 10 },
+        { month: "Apr", clicks: Math.floor(Math.random() * 30) + 10 },
+        { month: "May", clicks: Math.floor(Math.random() * 30) + 10 },
+        { month: "Jun", clicks: clickRate }
+      ]);
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
   const summaryStats = [
     {
       title: "Total Campaigns Launched",
-      value: "24",
-      description: "This month",
+      value: stats.totalCampaigns.toString(),
+      description: "All time",
       icon: Mail,
       trend: "+12%",
       positive: true
     },
     {
-      title: "Total Employees Targeted",
-      value: "1,247",
-      description: "Active employees",
+      title: "Total Employees",
+      value: stats.totalEmployees.toString(),
+      description: "In directory",
       icon: Users,
       trend: "+3%",
       positive: true
     },
     {
       title: "Click Rate",
-      value: "18.5%",
+      value: stats.clickRate,
       description: "Average across campaigns",
       icon: MousePointer,
       trend: "-5%",
-      positive: true
+      positive: false
     },
     {
       title: "Quiz Pass Rate",
-      value: "78%",
+      value: stats.quizPassRate,
       description: "Training completion",
       icon: GraduationCap,
       trend: "+8%",
@@ -58,61 +178,6 @@ const AdminDashboard = () => {
     }
   ];
 
-  const clickTrendData = [
-    { month: "Jan", clicks: 25 },
-    { month: "Feb", clicks: 22 },
-    { month: "Mar", clicks: 28 },
-    { month: "Apr", clicks: 19 },
-    { month: "May", clicks: 18 },
-    { month: "Jun", clicks: 15 }
-  ];
-
-  const departmentData = [
-    { department: "Sales", employees: 45, clicked: 12, rate: "27%" },
-    { department: "IT", employees: 32, clicked: 3, rate: "9%" },
-    { department: "HR", employees: 18, clicked: 4, rate: "22%" },
-    { department: "Finance", employees: 25, clicked: 8, rate: "32%" },
-    { department: "Marketing", employees: 28, clicked: 7, rate: "25%" }
-  ];
-
-  const recentCampaigns = [
-    {
-      id: 1,
-      name: "Banking Security Alert",
-      date: "2024-01-15",
-      targeted: 250,
-      clicked: 45,
-      clickRate: "18%",
-      status: "Completed"
-    },
-    {
-      id: 2,
-      name: "IT Support Request",
-      date: "2024-01-12",
-      targeted: 180,
-      clicked: 32,
-      clickRate: "18%",
-      status: "Completed"
-    },
-    {
-      id: 3,
-      name: "CEO Urgent Message",
-      date: "2024-01-10",
-      targeted: 320,
-      clicked: 68,
-      clickRate: "21%",
-      status: "Completed"
-    },
-    {
-      id: 4,
-      name: "Payroll Update",
-      date: "2024-01-08",
-      targeted: 195,
-      clicked: 29,
-      clickRate: "15%",
-      status: "In Progress"
-    }
-  ];
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -130,6 +195,16 @@ const AdminDashboard = () => {
         return <Badge variant="outline">{status}</Badge>;
     }
   };
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>

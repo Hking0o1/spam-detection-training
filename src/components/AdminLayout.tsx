@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation, NavLink } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -24,6 +24,7 @@ import {
   X,
   Shield
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import logo from "@/assets/logo.png";
 
 interface AdminLayoutProps {
@@ -34,20 +35,40 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, signOut, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/admin-login");
+    }
+  }, [user, loading, navigate]);
 
   const navItems = [
-    { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+    { path: "/admin", icon: LayoutDashboard, label: "Dashboard" },
     { path: "/create-campaign", icon: Plus, label: "Create Campaign" },
     { path: "/employees", icon: Users, label: "Employee Directory" },
     { path: "/training", icon: GraduationCap, label: "Training" },
     { path: "/reports", icon: BarChart3, label: "Reports" },
   ];
 
-  const handleLogout = () => {
-    navigate("/admin");
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/admin-login");
   };
 
   const isActive = (path: string) => location.pathname === path;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -120,9 +141,11 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">Admin User</p>
+                    <p className="text-sm font-medium leading-none">
+                      {user?.email?.split('@')[0] || 'Admin'}
+                    </p>
                     <p className="text-xs leading-none text-muted-foreground">
-                      admin@secureguard.com
+                      {user?.email}
                     </p>
                   </div>
                 </DropdownMenuLabel>
