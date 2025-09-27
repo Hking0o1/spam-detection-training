@@ -1,1 +1,1 @@
-#Spam detection training
+# Spam detection training
