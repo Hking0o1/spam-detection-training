@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AdminLayout from "@/components/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,69 +7,193 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Mail, Users, Eye, Send, Clock } from "lucide-react";
+import { Calendar, Mail, Users, Eye, Send, Clock, Upload, Edit, Trash2, Plus } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import BulkEmailUpload from "@/components/BulkEmailUpload";
+
+interface Employee {
+  id: string;
+  name: string;
+  email: string;
+  department: string;
+  status: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Template {
+  id: string;
+  name: string;
+  subject: string;
+  content: string;
+  template_type: string;
+}
 
 const CreateCampaign = () => {
   const [campaignName, setCampaignName] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [customSubject, setCustomSubject] = useState("");
   const [customEmail, setCustomEmail] = useState("");
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [newTemplate, setNewTemplate] = useState({ name: "", subject: "", content: "", template_type: "" });
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
 
-  const emailTemplates = [
-    {
-      id: "banking-alert",
-      name: "Banking Security Alert",
-      subject: "Urgent: Suspicious Activity Detected",
-      preview: "Your account has been flagged for suspicious activity. Click here to verify...",
-      category: "Financial"
-    },
-    {
-      id: "it-support",
-      name: "IT Support Request",
-      subject: "Action Required: System Update",
-      preview: "IT department requires you to update your password immediately...",
-      category: "Technical"
-    },
-    {
-      id: "ceo-urgent",
-      name: "CEO Urgent Message",
-      subject: "URGENT: CEO Request",
-      preview: "This is an urgent request from the CEO. Please respond immediately...",
-      category: "Executive"
-    },
-    {
-      id: "payroll-update",
-      name: "Payroll Update",
-      subject: "Payroll System Update Required",
-      preview: "Update your payroll information to continue receiving payments...",
-      category: "HR"
+  useEffect(() => {
+    fetchEmployees();
+    fetchTemplates();
+  }, []);
+
+  const fetchEmployees = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('status', 'active')
+        .order('name');
+      
+      if (error) throw error;
+      setEmployees(data || []);
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load employees"
+      });
     }
-  ];
+  };
 
-  const employeeGroups = [
-    { id: "all", name: "All Employees", count: 1247 },
-    { id: "sales", name: "Sales Department", count: 45 },
-    { id: "it", name: "IT Department", count: 32 },
-    { id: "hr", name: "HR Department", count: 18 },
-    { id: "finance", name: "Finance Department", count: 25 },
-    { id: "marketing", name: "Marketing Department", count: 28 },
-    { id: "new-hires", name: "New Hires (Last 30 days)", count: 12 }
-  ];
+  const fetchTemplates = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('campaigns')
+        .select('id, name, subject, content, template_type')
+        .not('template_type', 'is', null);
+      
+      if (error) throw error;
+      setTemplates(data || []);
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load templates"
+      });
+    }
+  };
 
-  const handleGroupToggle = (groupId: string) => {
-    setSelectedGroups(prev => 
-      prev.includes(groupId) 
-        ? prev.filter(id => id !== groupId)
-        : [...prev, groupId]
+  const saveTemplate = async () => {
+    try {
+      if (editingTemplate) {
+        const { error } = await supabase
+          .from('campaigns')
+          .update({
+            name: editingTemplate.name,
+            subject: editingTemplate.subject,
+            content: editingTemplate.content,
+            template_type: editingTemplate.template_type
+          })
+          .eq('id', editingTemplate.id);
+        
+        if (error) throw error;
+        toast({ title: "Template updated successfully" });
+      } else {
+        const { error } = await supabase
+          .from('campaigns')
+          .insert([{
+            ...newTemplate,
+            status: 'template'
+          }]);
+        
+        if (error) throw error;
+        toast({ title: "Template created successfully" });
+        setNewTemplate({ name: "", subject: "", content: "", template_type: "" });
+      }
+      
+      setEditingTemplate(null);
+      setIsDialogOpen(false);
+      fetchTemplates();
+    } catch (error) {
+      console.error('Error saving template:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to save template"
+      });
+    }
+  };
+
+  const deleteTemplate = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('campaigns')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      toast({ title: "Template deleted successfully" });
+      fetchTemplates();
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete template"
+      });
+    }
+  };
+
+  const getDepartmentCounts = () => {
+    const departments = employees.reduce((acc, emp) => {
+      acc[emp.department] = (acc[emp.department] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    return [
+      { id: "all", name: "All Employees", count: employees.length },
+      ...Object.entries(departments).map(([dept, count]) => ({
+        id: dept.toLowerCase().replace(/\s+/g, '-'),
+        name: `${dept} Department`,
+        count
+      }))
+    ];
+  };
+
+  const handleEmployeeToggle = (employeeId: string) => {
+    setSelectedEmployees(prev => 
+      prev.includes(employeeId) 
+        ? prev.filter(id => id !== employeeId)
+        : [...prev, employeeId]
     );
   };
 
+  const handleDepartmentToggle = (department: string) => {
+    const deptEmployees = employees
+      .filter(emp => department === "all" || emp.department.toLowerCase().replace(/\s+/g, '-') === department)
+      .map(emp => emp.id);
+    
+    const allSelected = deptEmployees.every(id => selectedEmployees.includes(id));
+    
+    if (allSelected) {
+      setSelectedEmployees(prev => prev.filter(id => !deptEmployees.includes(id)));
+    } else {
+      setSelectedEmployees(prev => [...new Set([...prev, ...deptEmployees])]);
+    }
+  };
+
   const handlePreviewEmail = () => {
-    if (!selectedTemplate && !customEmail) {
+    const template = templates.find(t => t.id === selectedTemplate);
+    if (!template && !customEmail) {
       toast({
         variant: "destructive",
         title: "No Content Selected",
@@ -78,14 +202,19 @@ const CreateCampaign = () => {
       return;
     }
     
+    const content = template ? template.content : customEmail;
+    const subject = template ? template.subject : customSubject;
+    
     toast({
       title: "Email Preview",
-      description: "Preview window would open here in a real implementation."
+      description: `Subject: ${subject}\n\nContent: ${content.substring(0, 100)}...`
     });
   };
 
-  const handleSubmitCampaign = () => {
-    if (!campaignName || (!selectedTemplate && !customEmail) || selectedGroups.length === 0) {
+  const handleSubmitCampaign = async () => {
+    const template = templates.find(t => t.id === selectedTemplate);
+    
+    if (!campaignName || (!selectedTemplate && !customEmail) || selectedEmployees.length === 0) {
       toast({
         variant: "destructive",
         title: "Missing Information",
@@ -94,26 +223,66 @@ const CreateCampaign = () => {
       return;
     }
 
-    const targetCount = selectedGroups.reduce((total, groupId) => {
-      const group = employeeGroups.find(g => g.id === groupId);
-      return total + (group?.count || 0);
-    }, 0);
+    setIsLoading(true);
+    
+    try {
+      // Create campaign
+      const campaignData = {
+        name: campaignName,
+        subject: template ? template.subject : customSubject,
+        content: template ? template.content : customEmail,
+        template_type: template?.template_type || 'custom',
+        status: 'active',
+        scheduled_date: scheduleDate && scheduleTime ? new Date(`${scheduleDate} ${scheduleTime}`).toISOString() : null
+      };
 
-    toast({
-      title: "Campaign Launched Successfully",
-      description: `"${campaignName}" campaign launched targeting ${targetCount} employees.`
-    });
+      const { data: campaign, error: campaignError } = await supabase
+        .from('campaigns')
+        .insert([campaignData])
+        .select()
+        .single();
 
-    // Reset form
-    setCampaignName("");
-    setSelectedTemplate("");
-    setCustomEmail("");
-    setSelectedGroups([]);
-    setScheduleDate("");
-    setScheduleTime("");
+      if (campaignError) throw campaignError;
+
+      // Create campaign targets
+      const targets = selectedEmployees.map(employeeId => ({
+        campaign_id: campaign.id,
+        employee_id: employeeId
+      }));
+
+      const { error: targetsError } = await supabase
+        .from('campaign_targets')
+        .insert(targets);
+
+      if (targetsError) throw targetsError;
+
+      toast({
+        title: "Campaign Launched Successfully",
+        description: `"${campaignName}" campaign launched targeting ${selectedEmployees.length} employees.`
+      });
+
+      // Reset form
+      setCampaignName("");
+      setSelectedTemplate("");
+      setCustomSubject("");
+      setCustomEmail("");
+      setSelectedEmployees([]);
+      setScheduleDate("");
+      setScheduleTime("");
+    } catch (error) {
+      console.error('Error launching campaign:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to launch campaign"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const selectedTemplate_obj = emailTemplates.find(t => t.id === selectedTemplate);
+  const selectedTemplateObj = templates.find(t => t.id === selectedTemplate);
+  const departmentCounts = getDepartmentCounts();
 
   return (
     <AdminLayout>
@@ -150,13 +319,100 @@ const CreateCampaign = () => {
               </CardContent>
             </Card>
 
-            {/* Email Template Selection */}
+            {/* Email Template Management */}
             <Card>
               <CardHeader>
-                <CardTitle>Email Template</CardTitle>
-                <CardDescription>
-                  Choose from pre-designed templates or create a custom email
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Email Templates</CardTitle>
+                    <CardDescription>
+                      Manage and use email templates for your campaigns
+                    </CardDescription>
+                  </div>
+                  <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" onClick={() => setEditingTemplate(null)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        New Template
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>
+                          {editingTemplate ? 'Edit Template' : 'Create New Template'}
+                        </DialogTitle>
+                        <DialogDescription>
+                          Create or modify email templates for phishing campaigns
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>Template Name</Label>
+                          <Input
+                            value={editingTemplate ? editingTemplate.name : newTemplate.name}
+                            onChange={(e) => editingTemplate 
+                              ? setEditingTemplate({...editingTemplate, name: e.target.value})
+                              : setNewTemplate({...newTemplate, name: e.target.value})
+                            }
+                            placeholder="e.g., Banking Security Alert"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Template Type</Label>
+                          <Select
+                            value={editingTemplate ? editingTemplate.template_type : newTemplate.template_type}
+                            onValueChange={(value) => editingTemplate
+                              ? setEditingTemplate({...editingTemplate, template_type: value})
+                              : setNewTemplate({...newTemplate, template_type: value})
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select template type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="financial">Financial</SelectItem>
+                              <SelectItem value="technical">Technical</SelectItem>
+                              <SelectItem value="executive">Executive</SelectItem>
+                              <SelectItem value="hr">HR</SelectItem>
+                              <SelectItem value="security">Security</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Email Subject</Label>
+                          <Input
+                            value={editingTemplate ? editingTemplate.subject : newTemplate.subject}
+                            onChange={(e) => editingTemplate
+                              ? setEditingTemplate({...editingTemplate, subject: e.target.value})
+                              : setNewTemplate({...newTemplate, subject: e.target.value})
+                            }
+                            placeholder="e.g., Urgent: Account Security Alert"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Email Content</Label>
+                          <Textarea
+                            value={editingTemplate ? editingTemplate.content : newTemplate.content}
+                            onChange={(e) => editingTemplate
+                              ? setEditingTemplate({...editingTemplate, content: e.target.value})
+                              : setNewTemplate({...newTemplate, content: e.target.value})
+                            }
+                            placeholder="Write your email content here..."
+                            rows={8}
+                          />
+                        </div>
+                        <div className="flex justify-end space-x-2">
+                          <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button onClick={saveTemplate}>
+                            {editingTemplate ? 'Update' : 'Create'} Template
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -166,12 +422,12 @@ const CreateCampaign = () => {
                       <SelectValue placeholder="Choose an email template" />
                     </SelectTrigger>
                     <SelectContent>
-                      {emailTemplates.map((template) => (
+                      {templates.map((template) => (
                         <SelectItem key={template.id} value={template.id}>
                           <div className="flex items-center justify-between w-full">
                             <span>{template.name}</span>
                             <Badge variant="outline" className="ml-2">
-                              {template.category}
+                              {template.template_type}
                             </Badge>
                           </div>
                         </SelectItem>
@@ -180,18 +436,62 @@ const CreateCampaign = () => {
                   </Select>
                 </div>
 
-                {selectedTemplate_obj && (
+                {templates.length > 0 && (
+                  <div className="grid gap-2 max-h-40 overflow-y-auto">
+                    {templates.map((template) => (
+                      <div key={template.id} className="flex items-center justify-between p-2 border rounded">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{template.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{template.subject}</p>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingTemplate(template);
+                              setIsDialogOpen(true);
+                            }}
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteTemplate(template.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {selectedTemplateObj && (
                   <div className="p-4 border rounded-lg bg-muted/50">
-                    <h4 className="font-medium">{selectedTemplate_obj.name}</h4>
+                    <h4 className="font-medium">{selectedTemplateObj.name}</h4>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Subject: {selectedTemplate_obj.subject}
+                      Subject: {selectedTemplateObj.subject}
                     </p>
-                    <p className="text-sm mt-2">{selectedTemplate_obj.preview}</p>
+                    <div className="text-sm mt-2 max-h-32 overflow-y-auto">
+                      {selectedTemplateObj.content}
+                    </div>
                   </div>
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="custom-email">Or Write Custom Email</Label>
+                  <Label htmlFor="custom-subject">Custom Email Subject</Label>
+                  <Input
+                    id="custom-subject"
+                    placeholder="Enter custom email subject..."
+                    value={customSubject}
+                    onChange={(e) => setCustomSubject(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="custom-email">Custom Email Content</Label>
                   <Textarea
                     id="custom-email"
                     placeholder="Write your custom phishing email content here..."
@@ -208,45 +508,107 @@ const CreateCampaign = () => {
               </CardContent>
             </Card>
 
-            {/* Employee Group Selection */}
+            {/* Target Audience Selection */}
             <Card>
               <CardHeader>
-                <CardTitle>Target Audience</CardTitle>
-                <CardDescription>
-                  Select which employee groups to include in this campaign
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Target Audience</CardTitle>
+                    <CardDescription>
+                      Select employees for this campaign or upload CSV
+                    </CardDescription>
+                  </div>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Upload className="mr-2 h-4 w-4" />
+                        Upload CSV
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Upload Employee Data</DialogTitle>
+                        <DialogDescription>
+                          Upload a CSV file to add new employees to the system
+                        </DialogDescription>
+                      </DialogHeader>
+                      <BulkEmailUpload onUploadComplete={fetchEmployees} />
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="grid gap-3">
-                  {employeeGroups.map((group) => (
-                    <div
-                      key={group.id}
-                      className={`
-                        flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors
-                        ${selectedGroups.includes(group.id) 
-                          ? 'border-primary bg-primary/5' 
-                          : 'border-border hover:bg-accent'
-                        }
-                      `}
-                      onClick={() => handleGroupToggle(group.id)}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedGroups.includes(group.id)}
-                          onChange={() => handleGroupToggle(group.id)}
-                          className="rounded"
-                        />
-                        <div>
-                          <p className="font-medium">{group.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {group.count} employees
-                          </p>
+              <CardContent className="space-y-4">
+                {/* Department Quick Select */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Quick Select by Department</Label>
+                  <div className="grid gap-2">
+                    {departmentCounts.map((dept) => {
+                      const deptEmployees = employees
+                        .filter(emp => dept.id === "all" || emp.department.toLowerCase().replace(/\s+/g, '-') === dept.id)
+                        .map(emp => emp.id);
+                      const allSelected = deptEmployees.length > 0 && deptEmployees.every(id => selectedEmployees.includes(id));
+                      const someSelected = deptEmployees.some(id => selectedEmployees.includes(id));
+                      
+                      return (
+                        <div
+                          key={dept.id}
+                          className={`
+                            flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors
+                            ${allSelected 
+                              ? 'border-primary bg-primary/5' 
+                              : someSelected 
+                                ? 'border-primary/50 bg-primary/2'
+                                : 'border-border hover:bg-accent'
+                            }
+                          `}
+                          onClick={() => handleDepartmentToggle(dept.id)}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <Checkbox
+                              checked={allSelected}
+                              className={someSelected && !allSelected ? "data-[state=checked]:bg-primary/50" : ""}
+                            />
+                            <div>
+                              <p className="font-medium">{dept.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {dept.count} employees
+                              </p>
+                            </div>
+                          </div>
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Individual Employee Selection */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">
+                    Individual Employees ({selectedEmployees.length} selected)
+                  </Label>
+                  <div className="max-h-60 overflow-y-auto border rounded-lg">
+                    {employees.map((employee) => (
+                      <div
+                        key={employee.id}
+                        className={`
+                          flex items-center justify-between p-3 border-b last:border-b-0 cursor-pointer hover:bg-accent
+                          ${selectedEmployees.includes(employee.id) ? 'bg-primary/5' : ''}
+                        `}
+                        onClick={() => handleEmployeeToggle(employee.id)}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <Checkbox checked={selectedEmployees.includes(employee.id)} />
+                          <div>
+                            <p className="font-medium">{employee.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {employee.email} • {employee.department}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -301,22 +663,13 @@ const CreateCampaign = () => {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Template:</span>
                     <span className="font-medium">
-                      {selectedTemplate_obj?.name || (customEmail ? "Custom" : "Not selected")}
+                      {selectedTemplateObj?.name || (customEmail ? "Custom" : "Not selected")}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Target Groups:</span>
+                    <span className="text-muted-foreground">Selected Employees:</span>
                     <span className="font-medium">
-                      {selectedGroups.length || 0} selected
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Total Recipients:</span>
-                    <span className="font-medium">
-                      {selectedGroups.reduce((total, groupId) => {
-                        const group = employeeGroups.find(g => g.id === groupId);
-                        return total + (group?.count || 0);
-                      }, 0)}
+                      {selectedEmployees.length} employees
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
@@ -334,9 +687,10 @@ const CreateCampaign = () => {
                 onClick={handleSubmitCampaign}
                 className="w-full"
                 size="lg"
+                disabled={isLoading}
               >
                 <Send className="mr-2 h-4 w-4" />
-                Launch Campaign
+                {isLoading ? "Launching..." : "Launch Campaign"}
               </Button>
               <Button variant="outline" className="w-full">
                 <Clock className="mr-2 h-4 w-4" />

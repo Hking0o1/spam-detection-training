@@ -9,9 +9,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface BulkEmailUploadProps {
   onEmployeesImported?: (count: number) => void;
+  onUploadComplete?: () => void;
 }
 
-const BulkEmailUpload = ({ onEmployeesImported }: BulkEmailUploadProps) => {
+const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUploadProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedEmployees, setUploadedEmployees] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -72,6 +73,7 @@ const BulkEmailUpload = ({ onEmployeesImported }: BulkEmailUploadProps) => {
 
       setUploadedEmployees(data || []);
       onEmployeesImported?.(data?.length || 0);
+      onUploadComplete?.();
       
       toast({
         title: "Upload successful",
