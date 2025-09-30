@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AdminLayout from "@/components/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,13 +25,16 @@ import {
   Clock,
   Users
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import BulkEmailUpload from "@/components/BulkEmailUpload";
+import BulkEmailSender from "@/components/BulkEmailSender";
 
 interface Employee {
-  id: number;
+  id: string;
   name: string;
   email: string;
   department: string;
-  status: "Clicked" | "Not Clicked" | "Completed Training" | "Pending";
+  status: "Clicked" | "Not Clicked" | "Completed Training" | "Pending" | "Inactive";
   lastCampaign: string;
   completionRate: number;
 }
@@ -40,18 +43,50 @@ const EmployeeDirectory = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [showBulkEmail, setShowBulkEmail] = useState(false);
   const { toast } = useToast();
 
-  const employees: Employee[] = [
-    { id: 1, name: "John Smith", email: "john.smith@company.com", department: "Sales", status: "Clicked", lastCampaign: "Banking Alert", completionRate: 75 },
-    { id: 2, name: "Sarah Johnson", email: "sarah.johnson@company.com", department: "IT", status: "Not Clicked", lastCampaign: "IT Support", completionRate: 90 },
-    { id: 3, name: "Mike Davis", email: "mike.davis@company.com", department: "HR", status: "Completed Training", lastCampaign: "CEO Message", completionRate: 85 },
-    { id: 4, name: "Emily Brown", email: "emily.brown@company.com", department: "Finance", status: "Pending", lastCampaign: "Payroll Update", completionRate: 60 },
-    { id: 5, name: "Alex Wilson", email: "alex.wilson@company.com", department: "Marketing", status: "Clicked", lastCampaign: "Banking Alert", completionRate: 70 },
-    { id: 6, name: "Lisa Garcia", email: "lisa.garcia@company.com", department: "Sales", status: "Completed Training", lastCampaign: "IT Support", completionRate: 95 },
-    { id: 7, name: "David Miller", email: "david.miller@company.com", department: "IT", status: "Not Clicked", lastCampaign: "CEO Message", completionRate: 80 },
-    { id: 8, name: "Jennifer Lee", email: "jennifer.lee@company.com", department: "Finance", status: "Clicked", lastCampaign: "Payroll Update", completionRate: 65 },
-  ];
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const fetchEmployees = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      // Transform data to match the Employee interface
+      const transformedEmployees = data?.map(emp => ({
+        id: emp.id,
+        name: emp.name,
+        email: emp.email,
+        department: emp.department,
+        status: (emp.status === 'active' ? 'Pending' : 'Inactive') as Employee['status'],
+        lastCampaign: 'N/A',
+        completionRate: 0
+      })) || [];
+
+      setEmployees(transformedEmployees);
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load employees. Please try again."
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const departments = ["all", "Sales", "IT", "HR", "Finance", "Marketing"];
   const statuses = ["all", "Clicked", "Not Clicked", "Completed Training", "Pending"];
@@ -100,10 +135,12 @@ const EmployeeDirectory = () => {
     }
   };
 
-  const handleCSVUpload = () => {
+  const handleEmployeesImported = (count: number) => {
+    fetchEmployees(); // Refresh the employee list
+    setShowBulkUpload(false);
     toast({
-      title: "CSV Upload",
-      description: "File upload functionality would be implemented here."
+      title: "Import Successful",
+      description: `${count} employees have been imported successfully.`
     });
   };
 
@@ -134,7 +171,7 @@ const EmployeeDirectory = () => {
             </p>
           </div>
           <div className="flex space-x-2">
-            <Button variant="outline" onClick={handleCSVUpload}>
+            <Button variant="outline" onClick={() => setShowBulkUpload(!showBulkUpload)}>
               <Upload className="mr-2 h-4 w-4" />
               Import CSV
             </Button>
@@ -142,8 +179,22 @@ const EmployeeDirectory = () => {
               <Download className="mr-2 h-4 w-4" />
               Export Data
             </Button>
+            <Button onClick={() => setShowBulkEmail(!showBulkEmail)}>
+              <Mail className="mr-2 h-4 w-4" />
+              Bulk Email
+            </Button>
           </div>
         </div>
+
+        {/* Bulk Upload Section */}
+        {showBulkUpload && (
+          <BulkEmailUpload onEmployeesImported={handleEmployeesImported} />
+        )}
+
+        {/* Bulk Email Section */}
+        {showBulkEmail && (
+          <BulkEmailSender />
+        )}
 
         {/* Statistics Cards */}
         <div className="grid gap-4 md:grid-cols-5">
@@ -246,46 +297,53 @@ const EmployeeDirectory = () => {
         {/* Employee Table */}
         <Card>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last Campaign</TableHead>
-                  <TableHead>Training Rate</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredEmployees.map((employee) => (
-                  <TableRow key={employee.id}>
-                    <TableCell className="font-medium">{employee.name}</TableCell>
-                    <TableCell>{employee.email}</TableCell>
-                    <TableCell>{employee.department}</TableCell>
-                    <TableCell>{getStatusBadge(employee.status)}</TableCell>
-                    <TableCell>{employee.lastCampaign}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-full bg-muted rounded-full h-2">
-                          <div
-                            className="bg-primary h-2 rounded-full"
-                            style={{ width: `${employee.completionRate}%` }}
-                          />
-                        </div>
-                        <span className="text-sm font-medium">{employee.completionRate}%</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm">
-                        <Mail className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                <span className="ml-2 text-sm text-muted-foreground">Loading employees...</span>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Last Campaign</TableHead>
+                    <TableHead>Training Rate</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredEmployees.map((employee) => (
+                    <TableRow key={employee.id}>
+                      <TableCell className="font-medium">{employee.name}</TableCell>
+                      <TableCell>{employee.email}</TableCell>
+                      <TableCell>{employee.department}</TableCell>
+                      <TableCell>{getStatusBadge(employee.status)}</TableCell>
+                      <TableCell>{employee.lastCampaign}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-full bg-muted rounded-full h-2">
+                            <div
+                              className="bg-primary h-2 rounded-full"
+                              style={{ width: `${employee.completionRate}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-medium">{employee.completionRate}%</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm">
+                          <Mail className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
 

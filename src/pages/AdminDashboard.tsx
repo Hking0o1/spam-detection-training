@@ -31,9 +31,9 @@ const AdminDashboard = () => {
     clickRate: "0%",
     quizPassRate: "0%"
   });
-  const [clickTrendData, setClickTrendData] = useState([]);
-  const [departmentData, setDepartmentData] = useState([]);
-  const [recentCampaigns, setRecentCampaigns] = useState([]);
+  const [clickTrendData, setClickTrendData] = useState<any[]>([]);
+  const [departmentData, setDepartmentData] = useState<any[]>([]);
+  const [recentCampaigns, setRecentCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
