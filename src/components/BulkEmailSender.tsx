@@ -147,12 +147,37 @@ Executive Office`
         throw targetsError;
       }
 
-      // Here you would integrate with an actual email service
-      // For now, we'll simulate sending emails
-      
+      // Send emails using edge function
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const employee of employees) {
+        try {
+          const { error: emailError } = await supabase.functions.invoke('send-campaign-email', {
+            body: {
+              to: employee.email,
+              subject: emailSubject,
+              content: emailContent,
+              campaignId: campaign.id
+            }
+          });
+
+          if (emailError) {
+            console.error(`Failed to send email to ${employee.email}:`, emailError);
+            failCount++;
+          } else {
+            successCount++;
+          }
+        } catch (error) {
+          console.error(`Error sending email to ${employee.email}:`, error);
+          failCount++;
+        }
+      }
+
       toast({
-        title: "Bulk email sent successfully",
-        description: `Email sent to ${employees.length} employees in ${targetDepartment === 'all' ? 'all departments' : targetDepartment}.`
+        title: successCount > 0 ? "Bulk email campaign created" : "Email sending failed",
+        description: `Successfully sent ${successCount} emails. ${failCount > 0 ? `Failed to send ${failCount} emails.` : ''}`,
+        variant: failCount === employees.length ? "destructive" : "default"
       });
 
       // Reset form

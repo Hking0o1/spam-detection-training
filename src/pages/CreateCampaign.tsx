@@ -256,9 +256,38 @@ const CreateCampaign = () => {
 
       if (targetsError) throw targetsError;
 
+      // Send emails to all selected employees
+      const targetEmployees = employees.filter(emp => selectedEmployees.includes(emp.id));
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const employee of targetEmployees) {
+        try {
+          const { error: emailError } = await supabase.functions.invoke('send-campaign-email', {
+            body: {
+              to: employee.email,
+              subject: campaignData.subject,
+              content: campaignData.content,
+              campaignId: campaign.id
+            }
+          });
+
+          if (emailError) {
+            console.error(`Failed to send email to ${employee.email}:`, emailError);
+            failCount++;
+          } else {
+            successCount++;
+          }
+        } catch (error) {
+          console.error(`Error sending email to ${employee.email}:`, error);
+          failCount++;
+        }
+      }
+
       toast({
-        title: "Campaign Launched Successfully",
-        description: `"${campaignName}" campaign launched targeting ${selectedEmployees.length} employees.`
+        title: successCount > 0 ? "Campaign Launched Successfully" : "Campaign created but emails failed",
+        description: `"${campaignName}" campaign created. Sent ${successCount} emails successfully.${failCount > 0 ? ` Failed to send ${failCount} emails.` : ''}`,
+        variant: failCount === targetEmployees.length ? "destructive" : "default"
       });
 
       // Reset form
