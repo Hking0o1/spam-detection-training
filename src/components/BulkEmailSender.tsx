@@ -116,6 +116,18 @@ Executive Office`
         return;
       }
 
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          variant: "destructive",
+          title: "Authentication required",
+          description: "You must be logged in to send bulk emails."
+        });
+        return;
+      }
+
       // Create campaign record
       const { data: campaign, error: campaignError } = await supabase
         .from('campaigns')
@@ -124,7 +136,8 @@ Executive Office`
           subject: emailSubject,
           content: emailContent,
           template_type: selectedTemplate || 'custom',
-          status: 'active'
+          status: 'active',
+          created_by: user.id
         })
         .select()
         .single();

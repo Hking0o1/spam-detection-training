@@ -108,11 +108,24 @@ const CreateCampaign = () => {
         if (error) throw error;
         toast({ title: "Template updated successfully" });
       } else {
+        // Get current user for new template
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          toast({
+            variant: "destructive",
+            title: "Authentication required",
+            description: "You must be logged in to create templates."
+          });
+          return;
+        }
+
         const { error } = await supabase
           .from('campaigns')
           .insert([{
             ...newTemplate,
-            status: 'template'
+            status: 'template',
+            created_by: user.id
           }]);
         
         if (error) throw error;
@@ -226,6 +239,18 @@ const CreateCampaign = () => {
     setIsLoading(true);
     
     try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          variant: "destructive",
+          title: "Authentication required",
+          description: "You must be logged in to create campaigns."
+        });
+        return;
+      }
+
       // Create campaign
       const campaignData = {
         name: campaignName,
@@ -233,7 +258,8 @@ const CreateCampaign = () => {
         content: template ? template.content : customEmail,
         template_type: template?.template_type || 'custom',
         status: 'active',
-        scheduled_date: scheduleDate && scheduleTime ? new Date(`${scheduleDate} ${scheduleTime}`).toISOString() : null
+        scheduled_date: scheduleDate && scheduleTime ? new Date(`${scheduleDate} ${scheduleTime}`).toISOString() : null,
+        created_by: user.id
       };
 
       const { data: campaign, error: campaignError } = await supabase

@@ -96,7 +96,7 @@ export type Database = {
         Row: {
           content: string
           created_at: string
-          created_by: string | null
+          created_by: string
           id: string
           name: string
           scheduled_date: string | null
@@ -108,7 +108,7 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string
-          created_by?: string | null
+          created_by: string
           id?: string
           name: string
           scheduled_date?: string | null
@@ -120,7 +120,7 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string
-          created_by?: string | null
+          created_by?: string
           id?: string
           name?: string
           scheduled_date?: string | null
@@ -134,6 +134,7 @@ export type Database = {
       employees: {
         Row: {
           created_at: string
+          created_by: string
           department: string
           email: string
           id: string
@@ -143,6 +144,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          created_by: string
           department: string
           email: string
           id?: string
@@ -152,6 +154,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          created_by?: string
           department?: string
           email?: string
           id?: string

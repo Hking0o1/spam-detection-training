@@ -55,10 +55,28 @@ const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUpl
         return;
       }
 
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          variant: "destructive",
+          title: "Authentication required",
+          description: "You must be logged in to import employees."
+        });
+        return;
+      }
+
+      // Add created_by field to each employee
+      const employeesWithUser = employees.map(emp => ({
+        ...emp,
+        created_by: user.id
+      }));
+
       // Insert employees into Supabase
       const { data, error } = await supabase
         .from('employees')
-        .insert(employees)
+        .insert(employeesWithUser)
         .select();
 
       if (error) {
