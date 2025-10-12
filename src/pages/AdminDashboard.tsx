@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AdminLayout from "@/components/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { supabase } from "@/integrations/supabase/client";
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalCampaigns: 0,
     totalEmployees: 0,
@@ -217,7 +219,7 @@ const AdminDashboard = () => {
               Overview of your phishing awareness campaigns and training progress
             </p>
           </div>
-          <Button>
+          <Button onClick={() => navigate('/reports')}>
             <Eye className="mr-2 h-4 w-4" />
             View All Reports
           </Button>

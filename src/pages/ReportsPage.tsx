@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,82 +40,171 @@ import {
   Area,
   AreaChart
 } from "recharts";
+import { supabase } from "@/integrations/supabase/client";
 
 const ReportsPage = () => {
-  const clickedVsNotClicked = [
-    { name: "Clicked", value: 245, percentage: 23.5 },
-    { name: "Not Clicked", value: 798, percentage: 76.5 }
-  ];
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalCampaigns: 0,
+    totalTargets: 0,
+    avgClickRate: 0,
+    trainingCompletion: 0
+  });
+  const [clickedVsNotClicked, setClickedVsNotClicked] = useState<any[]>([]);
+  const [quizResults, setQuizResults] = useState<any[]>([]);
+  const [campaignData, setCampaignData] = useState<any[]>([]);
+  const [departmentPerformance, setDepartmentPerformance] = useState<any[]>([]);
+  const [monthlyTrends, setMonthlyTrends] = useState<any[]>([]);
 
-  const quizResults = [
-    { name: "Passed", value: 612, percentage: 78.2 },
-    { name: "Failed", value: 171, percentage: 21.8 }
-  ];
+  useEffect(() => {
+    fetchReportsData();
+  }, []);
 
-  const campaignData = [
-    {
-      id: 1,
-      name: "Banking Security Alert",
-      targetCount: 450,
-      clicks: 89,
-      clickRate: "19.8%",
-      quizCompletions: 67,
-      completionRate: "75.3%",
-      date: "2024-01-15",
-      status: "Completed"
-    },
-    {
-      id: 2,
-      name: "IT Support Request",
-      targetCount: 320,
-      clicks: 52,
-      clickRate: "16.3%",
-      quizCompletions: 41,
-      completionRate: "78.8%",
-      date: "2024-01-12",
-      status: "Completed"
-    },
-    {
-      id: 3,
-      name: "CEO Urgent Message",
-      targetCount: 280,
-      clicks: 71,
-      clickRate: "25.4%",
-      quizCompletions: 48,
-      completionRate: "67.6%",
-      date: "2024-01-10",
-      status: "Completed"
-    },
-    {
-      id: 4,
-      name: "Payroll Update",
-      targetCount: 195,
-      clicks: 33,
-      clickRate: "16.9%",
-      quizCompletions: 25,
-      completionRate: "75.8%",
-      date: "2024-01-08",
-      status: "Completed"
+  const fetchReportsData = async () => {
+    try {
+      // Fetch all required data
+      const [campaignsResult, targetsResult, clicksResult, quizResult, employeesResult, trainingsResult] = await Promise.all([
+        supabase.from('campaigns').select('*'),
+        supabase.from('campaign_targets').select('*'),
+        supabase.from('campaign_clicks').select('*'),
+        supabase.from('quiz_responses').select('*'),
+        supabase.from('employees').select('*'),
+        supabase.from('training_completions').select('*')
+      ]);
+
+      const totalCampaigns = campaignsResult.data?.length || 0;
+      const totalTargets = targetsResult.data?.length || 0;
+      const totalClicks = clicksResult.data?.length || 0;
+      const totalTrainings = trainingsResult.data?.length || 0;
+
+      // Calculate click rate
+      const avgClickRate = totalTargets > 0 ? (totalClicks / totalTargets) * 100 : 0;
+      
+      // Calculate training completion
+      const trainingCompletion = totalTargets > 0 ? (totalTrainings / totalTargets) * 100 : 0;
+
+      setStats({
+        totalCampaigns,
+        totalTargets,
+        avgClickRate: parseFloat(avgClickRate.toFixed(1)),
+        trainingCompletion: parseFloat(trainingCompletion.toFixed(1))
+      });
+
+      // Clicked vs Not Clicked
+      const notClicked = totalTargets - totalClicks;
+      setClickedVsNotClicked([
+        { name: "Clicked", value: totalClicks, percentage: avgClickRate.toFixed(1) },
+        { name: "Not Clicked", value: notClicked, percentage: (100 - avgClickRate).toFixed(1) }
+      ]);
+
+      // Quiz results
+      const passedQuizzes = quizResult.data?.filter(quiz => 
+        quiz.score >= Math.ceil(quiz.total_questions * 0.7)
+      ).length || 0;
+      const failedQuizzes = (quizResult.data?.length || 0) - passedQuizzes;
+      const passRate = quizResult.data?.length ? (passedQuizzes / quizResult.data.length) * 100 : 0;
+
+      setQuizResults([
+        { name: "Passed", value: passedQuizzes, percentage: passRate.toFixed(1) },
+        { name: "Failed", value: failedQuizzes, percentage: (100 - passRate).toFixed(1) }
+      ]);
+
+      // Campaign data with stats
+      const { data: campaignsWithStats } = await supabase
+        .from('campaigns')
+        .select(`
+          *,
+          campaign_targets(count),
+          campaign_clicks(count)
+        `)
+        .order('created_at', { ascending: false });
+
+      const formattedCampaigns = campaignsWithStats?.map(campaign => {
+        const targetCount = campaign.campaign_targets?.[0]?.count || 0;
+        const clicks = campaign.campaign_clicks?.[0]?.count || 0;
+        const clickRate = targetCount > 0 ? (clicks / targetCount) * 100 : 0;
+        
+        return {
+          id: campaign.id,
+          name: campaign.name,
+          targetCount,
+          clicks,
+          clickRate: `${clickRate.toFixed(1)}%`,
+          quizCompletions: 0,
+          completionRate: "0%",
+          date: new Date(campaign.created_at).toLocaleDateString(),
+          status: campaign.status === 'completed' ? 'Completed' : 'Active'
+        };
+      }) || [];
+
+      setCampaignData(formattedCampaigns);
+
+      // Department performance
+      const deptMap = employeesResult.data?.reduce((acc, emp) => {
+        if (!acc[emp.department]) {
+          acc[emp.department] = { employees: 0, clicked: 0, trained: 0 };
+        }
+        acc[emp.department].employees++;
+        return acc;
+      }, {} as any) || {};
+
+      // Count clicks per department
+      for (const click of clicksResult.data || []) {
+        const employee = employeesResult.data?.find(e => e.id === click.employee_id);
+        if (employee && deptMap[employee.department]) {
+          deptMap[employee.department].clicked++;
+        }
+      }
+
+      // Count trainings per department
+      for (const training of trainingsResult.data || []) {
+        const employee = employeesResult.data?.find(e => e.id === training.employee_id);
+        if (employee && deptMap[employee.department]) {
+          deptMap[employee.department].trained++;
+        }
+      }
+
+      const deptPerformance = Object.entries(deptMap).map(([dept, data]: [string, any]) => ({
+        department: dept,
+        employees: data.employees,
+        clickRate: data.employees > 0 ? Math.round((data.clicked / data.employees) * 100) : 0,
+        trainingRate: data.employees > 0 ? Math.round((data.trained / data.employees) * 100) : 0
+      }));
+
+      setDepartmentPerformance(deptPerformance);
+
+      // Monthly trends - group by month
+      const monthlyData: any = {};
+      campaignsResult.data?.forEach(campaign => {
+        const month = new Date(campaign.created_at).toLocaleDateString('en-US', { month: 'short' });
+        if (!monthlyData[month]) {
+          monthlyData[month] = { month, campaigns: 0, clicks: 0, trainings: 0 };
+        }
+        monthlyData[month].campaigns++;
+      });
+
+      clicksResult.data?.forEach(click => {
+        const month = new Date(click.clicked_at).toLocaleDateString('en-US', { month: 'short' });
+        if (monthlyData[month]) {
+          monthlyData[month].clicks++;
+        }
+      });
+
+      trainingsResult.data?.forEach(training => {
+        const month = new Date(training.completed_at).toLocaleDateString('en-US', { month: 'short' });
+        if (monthlyData[month]) {
+          monthlyData[month].trainings++;
+        }
+      });
+
+      setMonthlyTrends(Object.values(monthlyData));
+
+    } catch (error) {
+      console.error('Error fetching reports data:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
-
-  const monthlyTrends = [
-    { month: "Jul", campaigns: 3, clicks: 67, trainings: 45 },
-    { month: "Aug", campaigns: 4, clicks: 89, trainings: 72 },
-    { month: "Sep", campaigns: 5, clicks: 112, trainings: 89 },
-    { month: "Oct", campaigns: 3, clicks: 78, trainings: 65 },
-    { month: "Nov", campaigns: 6, clicks: 145, trainings: 118 },
-    { month: "Dec", campaigns: 4, clicks: 98, trainings: 87 }
-  ];
-
-  const departmentPerformance = [
-    { department: "Sales", employees: 45, clickRate: 27, trainingRate: 89 },
-    { department: "Marketing", employees: 28, clickRate: 25, trainingRate: 92 },
-    { department: "Finance", employees: 25, clickRate: 32, trainingRate: 76 },
-    { department: "HR", employees: 18, clickRate: 22, trainingRate: 94 },
-    { department: "IT", employees: 32, clickRate: 9, trainingRate: 97 },
-    { department: "Operations", employees: 38, clickRate: 21, trainingRate: 85 }
-  ];
+  };
 
   const COLORS = {
     primary: "hsl(var(--primary))",
@@ -125,14 +215,22 @@ const ReportsPage = () => {
   };
 
   const handleExportPDF = () => {
-    // Mock export functionality
     console.log("Exporting to PDF...");
   };
 
   const handleExportCSV = () => {
-    // Mock export functionality
     console.log("Exporting to CSV...");
   };
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
@@ -174,8 +272,8 @@ const ReportsPage = () => {
             <CardContent className="flex items-center justify-between p-6">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Campaigns</p>
-                <p className="text-2xl font-bold">24</p>
-                <p className="text-xs text-muted-foreground">+4 this month</p>
+                <p className="text-2xl font-bold">{stats.totalCampaigns}</p>
+                <p className="text-xs text-muted-foreground">All time</p>
               </div>
               <Mail className="h-4 w-4 text-muted-foreground" />
             </CardContent>
@@ -184,7 +282,7 @@ const ReportsPage = () => {
             <CardContent className="flex items-center justify-between p-6">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Targets</p>
-                <p className="text-2xl font-bold">1,043</p>
+                <p className="text-2xl font-bold">{stats.totalTargets}</p>
                 <p className="text-xs text-muted-foreground">Employees reached</p>
               </div>
               <Target className="h-4 w-4 text-muted-foreground" />
@@ -194,8 +292,8 @@ const ReportsPage = () => {
             <CardContent className="flex items-center justify-between p-6">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Average Click Rate</p>
-                <p className="text-2xl font-bold">19.7%</p>
-                <p className="text-xs text-success">-2.3% from last month</p>
+                <p className="text-2xl font-bold">{stats.avgClickRate}%</p>
+                <p className="text-xs text-muted-foreground">Across all campaigns</p>
               </div>
               <AlertTriangle className="h-4 w-4 text-muted-foreground" />
             </CardContent>
@@ -204,8 +302,8 @@ const ReportsPage = () => {
             <CardContent className="flex items-center justify-between p-6">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Training Completion</p>
-                <p className="text-2xl font-bold">78.2%</p>
-                <p className="text-xs text-success">+5.1% from last month</p>
+                <p className="text-2xl font-bold">{stats.trainingCompletion}%</p>
+                <p className="text-xs text-muted-foreground">Overall rate</p>
               </div>
               <Award className="h-4 w-4 text-muted-foreground" />
             </CardContent>
