@@ -25,6 +25,7 @@ import {
   Shield
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { NotificationItem } from "@/components/NotificationItem";
 import logo from "@/assets/logo.png";
 
 interface AdminLayoutProps {
@@ -33,6 +34,11 @@ interface AdminLayoutProps {
 
 const AdminLayout = ({ children }: AdminLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [notifications, setNotifications] = useState([
+    { id: '1', title: 'Campaign "Banking Alert" completed', time: '15 minutes ago' },
+    { id: '2', title: '5 employees need training', time: '1 hour ago' },
+    { id: '3', title: 'Monthly report generated', time: '2 hours ago' }
+  ]);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, signOut, loading } = useAuth();
@@ -54,6 +60,10 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
   const handleLogout = async () => {
     await signOut();
     navigate("/admin-login");
+  };
+
+  const handleDismissNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
   const isActive = (path: string) => location.pathname === path;
@@ -96,34 +106,33 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
             {/* Notifications */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative">
+                <Button variant="ghost" size="icon" className="relative rounded-full">
                   <Bell className="h-5 w-5" />
-                  <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs">
-                    3
-                  </Badge>
+                  {notifications.length > 0 && (
+                    <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                      {notifications.length}
+                    </Badge>
+                  )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80">
+              <DropdownMenuContent align="end" className="w-80 bg-popover">
                 <DropdownMenuLabel>Notifications</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium">Campaign "Banking Alert" completed</p>
-                    <p className="text-xs text-muted-foreground">15 minutes ago</p>
+                {notifications.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    No notifications
                   </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium">5 employees need training</p>
-                    <p className="text-xs text-muted-foreground">1 hour ago</p>
+                ) : (
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {notifications.map((notification) => (
+                      <NotificationItem
+                        key={notification.id}
+                        {...notification}
+                        onDismiss={handleDismissNotification}
+                      />
+                    ))}
                   </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium">Monthly report generated</p>
-                    <p className="text-xs text-muted-foreground">2 hours ago</p>
-                  </div>
-                </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
 

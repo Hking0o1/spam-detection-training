@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileSpreadsheet, Download, Users, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import * as XLSX from 'xlsx';
 
 interface BulkEmailUploadProps {
   onEmployeesImported?: (count: number) => void;
@@ -25,23 +26,18 @@ const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUpl
     setIsUploading(true);
     
     try {
-      const text = await file.text();
       let employees: any[] = [];
 
       if (file.name.endsWith('.csv')) {
+        const text = await file.text();
         employees = parseCSV(text);
       } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-        toast({
-          variant: "destructive",
-          title: "Excel files not supported yet",
-          description: "Please convert your Excel file to CSV format and try again."
-        });
-        return;
+        employees = await parseExcel(file);
       } else {
         toast({
           variant: "destructive",
           title: "Unsupported file format",
-          description: "Please upload a CSV file."
+          description: "Please upload a CSV or Excel file."
         });
         return;
       }
@@ -131,17 +127,68 @@ const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUpl
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim());
-      if (values.length >= 3) {
+      if (values.length >= 3 && values[emailIndex] && values[nameIndex]) {
         employees.push({
           name: values[nameIndex],
           email: values[emailIndex],
-          department: values[departmentIndex],
+          department: values[departmentIndex] || 'General',
           status: 'active'
         });
       }
     }
 
     return employees;
+  };
+
+  const parseExcel = async (file: File): Promise<Array<{name: string, email: string, department: string, status: string}>> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
+          
+          if (jsonData.length < 2) {
+            reject(new Error('Excel file is empty'));
+            return;
+          }
+
+          const headers = jsonData[0].map((h: string) => h.toLowerCase());
+          const employees: Array<{name: string, email: string, department: string, status: string}> = [];
+
+          const nameIndex = headers.findIndex((h: string) => h.includes('name'));
+          const emailIndex = headers.findIndex((h: string) => h.includes('email'));
+          const departmentIndex = headers.findIndex((h: string) => h.includes('department') || h.includes('dept'));
+
+          if (nameIndex === -1 || emailIndex === -1 || departmentIndex === -1) {
+            reject(new Error('Excel file must contain name, email, and department columns'));
+            return;
+          }
+
+          for (let i = 1; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            if (row.length >= 3 && row[emailIndex] && row[nameIndex]) {
+              employees.push({
+                name: String(row[nameIndex]),
+                email: String(row[emailIndex]),
+                department: String(row[departmentIndex] || 'General'),
+                status: 'active'
+              });
+            }
+          }
+
+          resolve(employees);
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsArrayBuffer(file);
+    });
   };
 
   const downloadTemplate = () => {
@@ -178,7 +225,7 @@ const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUpl
             <Input
               id="file-upload"
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx,.xls"
               ref={fileInputRef}
               onChange={handleFileUpload}
               disabled={isUploading}
@@ -194,7 +241,7 @@ const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUpl
             </Button>
           </div>
           <p className="text-sm text-muted-foreground">
-            CSV file should contain columns: name, email, department
+            CSV or Excel file should contain columns: name, email, department
           </p>
         </div>
 
@@ -219,7 +266,7 @@ const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUpl
         <div className="text-xs text-muted-foreground">
           <strong>File format requirements:</strong>
           <ul className="list-disc list-inside mt-1 space-y-1">
-            <li>CSV format only (.csv)</li>
+            <li>Supported formats: CSV (.csv) and Excel (.xlsx, .xls)</li>
             <li>Required columns: name, email, department</li>
             <li>First row should contain column headers</li>
             <li>Email addresses must be valid and unique</li>
