@@ -30,7 +30,7 @@ const handler = async (req: Request): Promise<Response> => {
     const trainingLink = `${Deno.env.get('SUPABASE_URL')}/training?token=${trainingData}`;
 
     const emailResponse = await resend.emails.send({
-      from: "Security Training <hkulshrestha6@gmail.com>",
+      from: "Security Training <onboarding@resend.dev>",
       to: [to],
       subject: subject,
       html: `
