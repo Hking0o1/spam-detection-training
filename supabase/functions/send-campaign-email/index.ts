@@ -73,6 +73,11 @@ const handler = async (req: Request): Promise<Response> => {
       `,
     });
 
+    if (emailResponse.error) {
+      console.error("Resend API Error:", emailResponse.error);
+      throw new Error(`Email failed: ${emailResponse.error.message}`);
+    }
+
     console.log("Email sent successfully:", emailResponse);
 
     return new Response(JSON.stringify(emailResponse), {
