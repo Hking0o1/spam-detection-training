@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Send, Users, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { emailSubjectSchema, emailContentSchema, sanitizeHtmlContent } from '@/lib/validation';
 
 const BulkEmailSender = () => {
   const [emailSubject, setEmailSubject] = useState("");
@@ -91,6 +92,30 @@ Executive Office`
       return;
     }
 
+    // Validate inputs
+    const subjectValidation = emailSubjectSchema.safeParse(emailSubject);
+    if (!subjectValidation.success) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: subjectValidation.error.errors[0].message
+      });
+      return;
+    }
+
+    const contentValidation = emailContentSchema.safeParse(emailContent);
+    if (!contentValidation.success) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: contentValidation.error.errors[0].message
+      });
+      return;
+    }
+
+    // Sanitize HTML content
+    const sanitizedContent = sanitizeHtmlContent(emailContent);
+
     setIsSending(true);
 
     try {
@@ -133,8 +158,8 @@ Executive Office`
         .from('campaigns')
         .insert({
           name: `Bulk Email - ${new Date().toLocaleDateString()}`,
-          subject: emailSubject,
-          content: emailContent,
+          subject: subjectValidation.data,
+          content: sanitizedContent,
           template_type: selectedTemplate || 'custom',
           status: 'active',
           created_by: user.id
@@ -169,8 +194,8 @@ Executive Office`
           const { error: emailError } = await supabase.functions.invoke('send-campaign-email', {
             body: {
               to: employee.email,
-              subject: emailSubject,
-              content: emailContent,
+              subject: subjectValidation.data,
+              content: sanitizedContent,
               campaignId: campaign.id
             }
           });

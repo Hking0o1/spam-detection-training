@@ -21,6 +21,15 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    // Verify authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { to, subject, content, campaignId }: EmailRequest = await req.json();
 
     console.log(`Sending campaign email to ${to} for campaign ${campaignId}`);

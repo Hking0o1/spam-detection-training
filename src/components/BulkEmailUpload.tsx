@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Upload, FileSpreadsheet, Download, Users, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import * as XLSX from 'xlsx';
+import { employeeSchema, sanitizeCsvField } from '@/lib/validation';
 
 interface BulkEmailUploadProps {
   onEmployeesImported?: (count: number) => void;
@@ -51,6 +52,39 @@ const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUpl
         return;
       }
 
+      // Validate all employees before inserting
+      const validationErrors: string[] = [];
+      const validatedEmployees: Array<{name: string, email: string, department: string}> = [];
+      
+      for (let i = 0; i < employees.length; i++) {
+        const result = employeeSchema.safeParse(employees[i]);
+        if (!result.success) {
+          validationErrors.push(`Row ${i + 1}: ${result.error.errors.map(e => e.message).join(', ')}`);
+        } else {
+          validatedEmployees.push(result.data);
+        }
+      }
+
+      if (validationErrors.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Validation failed",
+          description: validationErrors.slice(0, 3).join('; ') + (validationErrors.length > 3 ? `... and ${validationErrors.length - 3} more errors` : '')
+        });
+        setIsUploading(false);
+        return;
+      }
+
+      if (validatedEmployees.length === 0) {
+        toast({
+          variant: "destructive",
+          title: "No valid employees",
+          description: "No valid employees to import after validation"
+        });
+        setIsUploading(false);
+        return;
+      }
+
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -64,9 +98,10 @@ const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUpl
       }
 
       // Add created_by field to each employee
-      const employeesWithUser = employees.map(emp => ({
+      const employeesWithUser = validatedEmployees.map(emp => ({
         ...emp,
-        created_by: user.id
+        created_by: user.id,
+        status: 'active'
       }));
 
       // Insert employees into Supabase
@@ -109,12 +144,12 @@ const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUpl
     }
   };
 
-  const parseCSV = (text: string): Array<{name: string, email: string, department: string, status: string}> => {
+  const parseCSV = (text: string): Array<{name: string, email: string, department: string}> => {
     const lines = text.split('\n').filter(line => line.trim());
     if (lines.length < 2) return [];
 
     const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-    const employees: Array<{name: string, email: string, department: string, status: string}> = [];
+    const employees: Array<{name: string, email: string, department: string}> = [];
 
     // Expected headers: name, email, department
     const nameIndex = headers.findIndex(h => h.includes('name'));
@@ -126,13 +161,12 @@ const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUpl
     }
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim());
+      const values = lines[i].split(',').map(v => sanitizeCsvField(v.trim()));
       if (values.length >= 3 && values[emailIndex] && values[nameIndex]) {
         employees.push({
           name: values[nameIndex],
           email: values[emailIndex],
-          department: values[departmentIndex] || 'General',
-          status: 'active'
+          department: values[departmentIndex] || 'General'
         });
       }
     }
@@ -140,7 +174,7 @@ const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUpl
     return employees;
   };
 
-  const parseExcel = async (file: File): Promise<Array<{name: string, email: string, department: string, status: string}>> => {
+  const parseExcel = async (file: File): Promise<Array<{name: string, email: string, department: string}>> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       
@@ -157,7 +191,7 @@ const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUpl
           }
 
           const headers = jsonData[0].map((h: string) => h.toLowerCase());
-          const employees: Array<{name: string, email: string, department: string, status: string}> = [];
+          const employees: Array<{name: string, email: string, department: string}> = [];
 
           const nameIndex = headers.findIndex((h: string) => h.includes('name'));
           const emailIndex = headers.findIndex((h: string) => h.includes('email'));
@@ -172,10 +206,9 @@ const BulkEmailUpload = ({ onEmployeesImported, onUploadComplete }: BulkEmailUpl
             const row = jsonData[i];
             if (row.length >= 3 && row[emailIndex] && row[nameIndex]) {
               employees.push({
-                name: String(row[nameIndex]),
-                email: String(row[emailIndex]),
-                department: String(row[departmentIndex] || 'General'),
-                status: 'active'
+                name: sanitizeCsvField(String(row[nameIndex])),
+                email: sanitizeCsvField(String(row[emailIndex])),
+                department: sanitizeCsvField(String(row[departmentIndex] || 'General'))
               });
             }
           }

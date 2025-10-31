@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Calendar, Mail, Users, Eye, Send, Clock, Upload, Edit, Trash2, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import BulkEmailUpload from "@/components/BulkEmailUpload";
+import { campaignNameSchema, emailSubjectSchema, emailContentSchema, sanitizeHtmlContent } from '@/lib/validation';
 
 interface Employee {
   id: string;
@@ -251,11 +252,54 @@ const CreateCampaign = () => {
         return;
       }
 
+      // Validate campaign name
+      const nameValidation = campaignNameSchema.safeParse(campaignName);
+      if (!nameValidation.success) {
+        toast({
+          variant: "destructive",
+          title: "Validation Error",
+          description: nameValidation.error.errors[0].message
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Determine final subject and content
+      const finalSubject = template ? template.subject : customSubject;
+      const finalContent = template ? template.content : customEmail;
+
+      // Validate subject
+      const subjectValidation = emailSubjectSchema.safeParse(finalSubject);
+      if (!subjectValidation.success) {
+        toast({
+          variant: "destructive",
+          title: "Validation Error",
+          description: subjectValidation.error.errors[0].message
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Validate content
+      const contentValidation = emailContentSchema.safeParse(finalContent);
+      if (!contentValidation.success) {
+        toast({
+          variant: "destructive",
+          title: "Validation Error",
+          description: contentValidation.error.errors[0].message
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Sanitize content
+      const sanitizedContent = sanitizeHtmlContent(finalContent);
+
       // Create campaign
       const campaignData = {
-        name: campaignName,
-        subject: template ? template.subject : customSubject,
-        content: template ? template.content : customEmail,
+        name: nameValidation.data,
+        subject: subjectValidation.data,
+        content: sanitizedContent,
         template_type: template?.template_type || 'custom',
         status: 'active',
         scheduled_date: scheduleDate && scheduleTime ? new Date(`${scheduleDate} ${scheduleTime}`).toISOString() : null,
